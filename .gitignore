@@ -1,0 +1,12 @@
+build/
+data/
+dist/
+wandb/
+*.egg-info/
+outputs/
+.Trash-0/
+.devcontainer/
+*.pyc
+notebooks/.ipynb_checkpoints
+*.ipynb
+*.zip
