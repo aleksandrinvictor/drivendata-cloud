@@ -10,3 +10,7 @@ outputs/
 notebooks/.ipynb_checkpoints
 *.ipynb
 *.zip
+assets/
+benchmark_src/
+pretrained_models/
+predictions/
