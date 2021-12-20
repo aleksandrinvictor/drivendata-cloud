@@ -1,5 +1,5 @@
 experiment:
-  id: exp5
+  id: exp6
   fold: 0
   datapath: ./data/
   train_batch_size: 8
@@ -51,9 +51,15 @@ augmentation:
   train:
   - class_name: albumentations.Resize
     params:
-      height: 256
-      width: 256
+      height: 512
+      width: 512
       p: 1.0
+  - class_name: albumentations.HorizontalFlip
+    params:
+      p: 0.5
+  - class_name: albumentations.VerticalFlip
+    params:
+      p: 0.5
   - class_name: albumentations.Normalize
     # params:
     #   mean: [0.5, 0.5, 0.5]
@@ -69,8 +75,8 @@ augmentation:
   val:
   - class_name: albumentations.Resize
     params:
-      height: 256
-      width: 256
+      height: 512
+      width: 512
       always_apply: true
   - class_name: albumentations.Normalize
     # params:
@@ -87,8 +93,8 @@ augmentation:
   test:
   - class_name: albumentations.Resize
     params:
-      height: 256
-      width: 256
+      height: 512
+      width: 512
       always_apply: true
   - class_name: albumentations.Normalize
     # params:
@@ -110,6 +116,7 @@ augmentation:
   # - class_name: cloud.tta.Rotate
   #   params:
   #     angles:
+  #     - 45.0
   #     - 90.0
   #     - 270.0
 
