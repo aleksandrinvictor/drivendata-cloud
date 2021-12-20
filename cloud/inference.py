@@ -14,6 +14,7 @@ from tqdm import tqdm
 
 from cloud.dataset import CloudDataset
 from cloud.model import Cloud
+from cloud.tta import TTA
 from cloud.utils import build_object, load_augs
 
 
@@ -67,9 +68,9 @@ class Predictor:
 
             self.models.append(model)
 
-        # self.tta = None
-        # if "tta" in self.configs[0]["augmentation"].keys():
-        #     self.tta = TTA(self.configs[0]["augmentation"].tta)
+        self.tta = None
+        if "tta" in self.configs[0]["augmentation"].keys():
+            self.tta = TTA(self.configs[0]["augmentation"]["tta"])
 
 
 class TestPredictor(Predictor):
@@ -101,7 +102,11 @@ class TestPredictor(Predictor):
             for i in range(self.num_checkpoints):
                 model = self.models[i]
 
-                batch_pred = model(x)
+                if self.tta:
+                    batch_pred = self.tta(model, x)
+                else:
+                    batch_pred = model(x)
+
                 batch_pred = F.interpolate(batch_pred, size=(512, 512), mode="bilinear")
                 batch_pred = torch.softmax(batch_pred, dim=1)[:, 1].detach().cpu().numpy()
 
