@@ -1,4 +1,5 @@
 import os
+import warnings
 from typing import Any, Dict, List, Optional, Tuple
 
 import albumentations as A
@@ -10,6 +11,8 @@ from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 
 from cloud.utils import load_augs
+
+warnings.filterwarnings("ignore")
 
 
 def minmax_scale(x):
@@ -141,7 +144,8 @@ class CloudDataModule(pl.LightningDataModule):
         """
 
         bands = ["B02", "B03", "B04", "B08"]
-        basepath = os.path.join(self.cfg["experiment"]["datapath"], "folds")
+        # basepath = os.path.join(self.cfg["experiment"]["datapath"], "folds")
+        basepath = self.cfg["experiment"]["datapath"]
         feature_cols = ["chip_id"] + [f"{band}_path" for band in bands]
 
         if stage == "fit" or stage is None:

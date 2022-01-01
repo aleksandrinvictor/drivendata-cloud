@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-activation_mapping = {"softmax": nn.Softmax(dim=1), "sigmoid": nn.Sigmoid}
+activation_mapping = {"softmax": nn.Softmax(dim=1), "sigmoid": nn.Sigmoid()}
 
 
 def _threshold(x, threshold=None):
@@ -33,6 +33,7 @@ class IoU:
         if self.activation is not None:
             input = self.activation(input)
             input = input[:, 1].unsqueeze(dim=1)
+            # input = input.unsqueeze(dim=1)
 
         input = _threshold(input, threshold=self.threshold)
 
@@ -80,8 +81,22 @@ def jaccard_score(input: Tensor, target: Tensor, eps: float = 1e-6) -> Tensor:
     Tensor
         mean jaccard score
     """
-    intersection = torch.sum(input * target, dim=(2, 3))
-    union = torch.sum(input, dim=(2, 3)) + torch.sum(target, dim=(2, 3)) - intersection
+    # intersection = torch.sum(input * target, dim=(2, 3))
+    # union = torch.sum(input, dim=(2, 3)) + torch.sum(target, dim=(2, 3)) - intersection
+
+    intersection = torch.logical_and(input, target).sum((2, 3))
+    union = torch.logical_or(input, target).sum((2, 3))
+
+    # You can comment out this line if you are passing tensors of equal shape
+    # But if you are passing output from UNet or something it will most probably
+    # be with the BATCH x 1 x H x W shape
+    # outputs = outputs.squeeze(1)  # BATCH x 1 x H x W => BATCH x H x W
+
+    # intersection = (outputs & labels).float().sum((1, 2))  # Will be zero if Truth=0 or Prediction=0
+    # union = (outputs | labels).float().sum((1, 2))         # Will be zzero if both are 0
+
+    # iou = (intersection + SMOOTH) / (union + SMOOTH)  # We smooth our devision to avoid 0/0
+
     return torch.mean((intersection + eps) / (union + eps))
 
 

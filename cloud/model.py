@@ -4,6 +4,8 @@ import pytorch_lightning as pl
 import torch
 from torch.tensor import Tensor
 
+from cloud.batch_augs import CutMix
+from cloud.ema import ModelEMA
 from cloud.utils import build_object, load_metrics
 
 
@@ -20,17 +22,40 @@ class Cloud(pl.LightningModule):
 
         self.metrics = load_metrics(self.cfg["metrics"])
 
+        # self.cutmix = build_object(cfg["augmentation"]["cutmix"])
+
+        # if self.cfg["experiment"]["ema"]:
+        #     self.ema = ModelEMA(self.model)
+        #     self.ema.to(self.cfg["experiment"]["device"])
+        # else:
+        #     self.ema = None
+
+    def on_fit_start(self) -> None:
+        if self.cfg["experiment"]["ema"]:
+            self.ema = ModelEMA(self.model)
+        else:
+            self.ema = None
+
     def configure_optimizers(self):
         optimizer = build_object(self.cfg["optimizer"], params=self.model.parameters())
 
-        scheduler = build_object(self.cfg["scheduler"], optimizer=optimizer)
+        if "scheduler" in self.cfg.keys():
+            scheduler = build_object(self.cfg["scheduler"], optimizer=optimizer)
 
-        return [optimizer], [scheduler]
+            return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
+        else:
+            return {"optimizer": optimizer}
+
+        # return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
 
     def forward(self, x):
         return self.model(x)
 
     def training_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Tensor:
+
+        # mixed_images, mixed_targets = self.cutmix(batch["chip"], batch["label"])
+        # x = mixed_images
+        # y = mixed_targets.long()
 
         x = batch["chip"]
         y = batch["label"].long()
@@ -63,12 +88,19 @@ class Cloud(pl.LightningModule):
 
         return train_loss
 
+    def training_step_end(self, batch_parts):
+        if self.ema is not None:
+            self.ema.update(self.model)
+
     def validation_step(self, batch: Dict[str, Tensor], batch_idx: int) -> None:
 
         x = batch["chip"]
         y = batch["label"].long()
 
-        out = self(x)
+        if self.ema is not None:
+            out = self.ema(x)
+        else:
+            out = self(x)
         val_loss = self.criterion(out, y)
 
         with torch.no_grad():

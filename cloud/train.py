@@ -52,7 +52,10 @@ def train(cfg: Dict[str, Any], fold: int) -> None:
         reinit=True,
     )
 
-    model = Cloud(cfg)
+    if "pretrained" in cfg["experiment"].keys():
+        model = Cloud.load_from_checkpoint(checkpoint_path=cfg["experiment"]["pretrained"], cfg=cfg)
+    else:
+        model = Cloud(cfg)
 
     datamodule = CloudDataModule(cfg)
 
@@ -63,7 +66,20 @@ def train(cfg: Dict[str, Any], fold: int) -> None:
         logger=exp_logger,
         callbacks=callbacks,
         deterministic=True,
+        gradient_clip_val=1.0,
     )
+
+    # # Run learning rate finder
+    # lr_finder = trainer.tuner.lr_find(model, datamodule=datamodule, num_training=1000)
+
+    # # Plot with
+    # fig = lr_finder.plot(suggest=True)
+    # fig.savefig("lr.png")
+
+    # # Pick point based on plot, or get suggestion
+    # new_lr = lr_finder.suggestion()
+
+    # print(f"new_lr: {new_lr}")
 
     trainer.fit(model, datamodule=datamodule)
 

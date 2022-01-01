@@ -46,6 +46,8 @@ class BceDiceLoss:
     def __init__(self, bce_coef: float = 0.5, dice_coef: float = 0.5):
 
         self.bce = torch.nn.CrossEntropyLoss()
+
+        # self.bce = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(0.6086))
         self.dice = SoftDiceLoss(activation="softmax")
 
         self.bce_coef = bce_coef
