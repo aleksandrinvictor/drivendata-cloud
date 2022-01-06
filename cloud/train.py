@@ -67,6 +67,7 @@ def train(cfg: Dict[str, Any], fold: int) -> None:
         callbacks=callbacks,
         deterministic=True,
         gradient_clip_val=1.0,
+        # accumulate_grad_batches=4,
     )
 
     # # Run learning rate finder

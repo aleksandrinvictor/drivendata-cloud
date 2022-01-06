@@ -13,20 +13,17 @@ from cloud.model import Cloud
 def objective(trial: optuna.trial.Trial, cfg: Dict[str, Any]) -> float:
 
     # We optimize the number of layers, hidden units in each layer and dropouts.
-    beta = trial.suggest_float("beta", 0.5, 5.0, step=0.5)
-    lam_min = trial.suggest_float("lam_min", 0.8, 0.95, step=0.01)
-    lam_max = trial.suggest_float("lam_max", 0.8, 0.99, step=0.01)
-    num_boxes = trial.suggest_int("num_boxes", 4, 8, step=1)
-
-    if lam_min > lam_max:
-        return -1e6
+    brightness = trial.suggest_float("brightness", 0.1, 0.5, step=0.05)
+    contrast = trial.suggest_float("contrast", 0.1, 0.5, step=0.05)
+    saturation = trial.suggest_float("saturation", 0.1, 0.5, step=0.05)
+    hue = trial.suggest_float("hue", 0.1, 0.5, step=0.05)
 
     trial_cfg = deepcopy(cfg)
-    trial_cfg["augmentation"]["cutmix"]["params"]["beta"] = beta
-    trial_cfg["augmentation"]["cutmix"]["params"]["lam_min"] = lam_min
-    trial_cfg["augmentation"]["cutmix"]["params"]["lam_max"] = lam_max
-    trial_cfg["augmentation"]["cutmix"]["params"]["num_boxes"] = num_boxes
-    trial_cfg["augmentation"]["cutmix"]["params"]["p"] = 1.0
+    trial_cfg["augmentation"]["train"][2]["params"]["brightness"] = brightness
+    trial_cfg["augmentation"]["train"][2]["params"]["contrast"] = contrast
+    trial_cfg["augmentation"]["train"][2]["params"]["saturation"] = saturation
+    trial_cfg["augmentation"]["train"][2]["params"]["hue"] = hue
+    # trial_cfg["augmentation"]["cutmix"]["params"]["p"] = 1.0
 
     seed_everything(trial_cfg["experiment"]["seed"])
     model = Cloud(trial_cfg)

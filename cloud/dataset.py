@@ -183,6 +183,7 @@ class CloudDataModule(pl.LightningDataModule):
             num_workers=num_workers,
             pin_memory=True,
             shuffle=True,
+            drop_last=True,
         )
         return train_dataloader
 

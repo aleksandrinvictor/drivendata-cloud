@@ -1,19 +1,9 @@
 import argparse
 from pathlib import Path
-from typing import Any, Dict
 
-import numpy as np
 import pandas as pd
-import torch
-import torch.nn.functional as F
-import yaml
-from PIL import Image
-from tqdm import tqdm
 
-from cloud.dataset import CloudDataset
 from cloud.inference import PseudoLabelsPredictor
-from cloud.model import Cloud
-from cloud.utils import build_object, load_augs
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_path", default="./assets/exp16")

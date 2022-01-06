@@ -24,11 +24,11 @@ class Cloud(pl.LightningModule):
 
         # self.cutmix = build_object(cfg["augmentation"]["cutmix"])
 
-        # if self.cfg["experiment"]["ema"]:
-        #     self.ema = ModelEMA(self.model)
-        #     self.ema.to(self.cfg["experiment"]["device"])
-        # else:
-        #     self.ema = None
+        if self.cfg["experiment"]["ema"]:
+            self.ema = ModelEMA(self.model)
+            self.ema.ema.to(self.cfg["experiment"]["device"])
+        else:
+            self.ema = None
 
     def on_fit_start(self) -> None:
         if self.cfg["experiment"]["ema"]:
@@ -60,7 +60,7 @@ class Cloud(pl.LightningModule):
         x = batch["chip"]
         y = batch["label"].long()
 
-        out = self(x)
+        out = self.model(x)
 
         train_loss = self.criterion(out, y)
 

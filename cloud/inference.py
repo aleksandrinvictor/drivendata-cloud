@@ -1,9 +1,12 @@
 import argparse
+import json
 import logging
 import os
 import pathlib
+from copy import deepcopy
 from glob import glob
 from pathlib import Path
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
@@ -16,7 +19,7 @@ from tqdm import tqdm
 from cloud.dataset import CloudDataset
 from cloud.model import Cloud
 from cloud.tta import TTA
-from cloud.utils import build_object, load_augs
+from cloud.utils import build_object, load_augs, load_metrics
 
 
 def parse_args():
@@ -210,6 +213,70 @@ class PseudoLabelsPredictor(Predictor):
         return pseudo_labels
 
 
+class ValPredictor(Predictor):
+    def __init__(self, model_path: str, device: str, threshold: float = 0.5) -> None:
+        super().__init__(model_path, None, device)
+
+        metrcis_config = deepcopy(self.configs[0]["metrics"])
+        metrcis_config[0]["params"]["threshold"] = threshold
+
+        self.metrics = load_metrics(metrcis_config)
+
+    def _make_dataloader(self, fold: int) -> torch.utils.data.DataLoader:
+        cfg = self.configs[fold]
+
+        val_augs = load_augs(cfg["augmentation"]["val"])
+
+        x_paths = pd.read_csv(os.path.join(cfg["experiment"]["datapath"], f"{fold}/val.csv"))
+
+        dataset = CloudDataset(
+            x_paths=x_paths, y_paths=x_paths, bands=["B02", "B03", "B04", "B08"], transforms=val_augs
+        )
+        dataloader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=cfg["experiment"]["val_batch_size"],
+            num_workers=8,
+            shuffle=False,
+            pin_memory=True,
+        )
+
+        return dataloader
+
+    @torch.no_grad()
+    def evaluate(self):
+
+        metrics: Dict[Any, Any] = {i: {} for i in range(self.num_folds)}
+
+        for i in range(self.num_folds):
+
+            fold_metrics = {}
+
+            model = self.models[i]
+
+            dataloader = self._make_dataloader(i)
+
+            for batch in tqdm(dataloader):
+
+                x = batch["chip"].to(self.device)
+                y = batch["label"].to(self.device).long()
+
+                if self.tta:
+                    batch_pred = self.tta(model, x)
+                else:
+                    batch_pred = model(x)
+
+                for name, metric in self.metrics.items():
+                    fold_metrics[name] = fold_metrics.get(name, 0) + metric(batch_pred, y).item() / len(dataloader)
+
+            metrics[i] = fold_metrics
+
+            for name, metric_val in fold_metrics.items():
+                print(f"fold: {i}, metric: {name}, val: {metric_val}")
+                metrics[f"cv_score_{name}"] = metrics.get(f"cv_score_{name}", 0) + metric_val / self.num_folds
+
+        return metrics
+
+
 if __name__ == "__main__":
     log_fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     logging.basicConfig(level=logging.INFO, format=log_fmt)
@@ -219,12 +286,36 @@ if __name__ == "__main__":
 
     path = pathlib.PurePath(args.model_path)
 
-    x_paths = pd.read_csv("./data/init_folds/0/val.csv")
+    # x_paths = pd.read_csv("./data/init_folds/0/val.csv")
 
     logger.info(f"Model: {path.name}")
 
-    pred_dir = Path("./predictions")
-    pred_dir.mkdir(exist_ok=True, parents=True)
+    # pred_dir = Path("./predictions")
+    # pred_dir.mkdir(exist_ok=True, parents=True)
 
-    test_predictor = TestPredictor(args.model_path, x_paths, device="cuda", predictions_dir=pred_dir)
-    test_predictor.predict()
+    # test_predictor = TestPredictor(args.model_path, x_paths, device="cuda", predictions_dir=pred_dir)
+    # test_predictor.predict()
+
+    val_predictor = ValPredictor(args.model_path, device="cuda")
+    metrics = val_predictor.evaluate()
+
+    with open(os.path.join(args.model_path, "metrics.json"), "w") as fp:
+        json.dump(metrics, fp)
+
+    # best = 0.0
+    # best_threshold = None
+
+    # for threshold in np.arange(0.45, 0.55, 0.01):
+    #     val_predictor = ValPredictor(args.model_path, device="cuda", threshold=threshold)
+    #     metrics = val_predictor.evaluate()
+
+    #     cv_score = metrics["cv_score_IoU"]
+
+    #     if best < cv_score:
+    #         best = cv_score
+    #         best_threshold = threshold
+
+    #     print(f"threshold: {threshold}, metric: {cv_score}, best_metric: {best} (threshold: {best_threshold})")
+
+    # with open(os.path.join(args.model_path, "metrics.json"), "w") as fp:
+    #     json.dump(metrics, fp)
