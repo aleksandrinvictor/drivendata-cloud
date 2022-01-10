@@ -1,9 +1,9 @@
 experiment:
-  id: exp49
+  id: exp102_small_bs
   fold: 0
   datapath: ./data/pseudo_labels_3_folds
-  train_batch_size: 8
-  val_batch_size: 8
+  train_batch_size: 4
+  val_batch_size: 4
   max_epochs: 30
   num_workers: 10
   profiler: false
@@ -37,18 +37,6 @@ scheduler:
     T_max: 30
     last_epoch: -1
     eta_min: 0.000001
-  # class_name: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
-  # params:
-  #   T_0: 10
-  #   T_mult: 1
-  #   eta_min: 0.000001
-  #   last_epoch: -1
-  # class_name: torch.optim.lr_scheduler.ReduceLROnPlateau
-  # params:
-  #   factor: 0.5
-  #   mode: min
-  #   verbose: True
-  #   patience: 2
 
 callbacks:
   - class_name: pytorch_lightning.callbacks.EarlyStopping
@@ -71,11 +59,6 @@ callbacks:
 
 augmentation:
   train:
-  - class_name: albumentations.Resize
-    params:
-      height: 256
-      width: 256
-      p: 1.0
   - class_name: albumentations.HorizontalFlip
     params:
       p: 0.5
@@ -101,11 +84,6 @@ augmentation:
     params:
       transpose_mask: True
   val:
-  - class_name: albumentations.Resize
-    params:
-      height: 256
-      width: 256
-      always_apply: True
   - class_name: albumentations.Normalize
     # params:
     #   mean: [0.5, 0.5, 0.5]
@@ -119,11 +97,6 @@ augmentation:
     params:
       transpose_mask: True
   test:
-  - class_name: albumentations.Resize
-    params:
-      height: 256
-      width: 256
-      always_apply: True
   - class_name: albumentations.Normalize
     # params:
     #   mean: [0.5, 0.5, 0.5]
@@ -143,9 +116,6 @@ augmentation:
   #     lam_max: 0.97
   #     p: 0.5
   tta:
-  - class_name: cloud.tta.Flip
-    params:
-      orientation: horizontal
   - class_name: cloud.tta.Rotate
     params:
       angles:
