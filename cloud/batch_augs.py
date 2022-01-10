@@ -81,11 +81,13 @@ class CutMix:
         if np.random.uniform() >= self.p or num_images == 1:
             return images, targets
 
-        rand_index = torch.randperm(images.size(0))
+        # rand_index = torch.randperm(images.size(0))
         mixed_images = images.clone()
         mixed_targets = targets.clone()
 
         for _ in range(self.num_boxes):
+            rand_index = torch.randperm(images.size(0))
+
             lam = np.clip(np.random.beta(self.beta, self.beta), self.lam_min, self.lam_max)
 
             x1, y1, x2, y2 = rand_bbox(images.shape, lam)

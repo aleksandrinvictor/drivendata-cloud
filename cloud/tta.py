@@ -1,5 +1,6 @@
 from typing import Any, Callable, Dict, List
 
+import torch
 import torchvision.transforms.functional as TF
 from torch import Tensor
 
@@ -10,9 +11,9 @@ class Flip:
     def __init__(self, orientation: str = "horizontal"):
 
         if orientation == "horizontal":
-            self.transform = TF.hflip
+            self.flip_dim = 3
         else:
-            self.transform = TF.vflip
+            self.flip_dim = 2
 
     def __len__(self):
         return 1
@@ -21,7 +22,7 @@ class Flip:
 
         divide_by = len(self)
 
-        pred = self.transform(model(self.transform(input)))
+        pred = model(input.flip(self.flip_dim)).flip(self.flip_dim)
 
         if add_model_pred:
             pred += model(input)

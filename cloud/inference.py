@@ -6,20 +6,42 @@ import pathlib
 from copy import deepcopy
 from glob import glob
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
+import cv2
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
 import yaml
 from PIL import Image
+from torch import Tensor
 from tqdm import tqdm
 
 from cloud.dataset import CloudDataset
 from cloud.model import Cloud
 from cloud.tta import TTA
 from cloud.utils import build_object, load_augs, load_metrics
+
+
+class PostProcess:
+    def __init__(self, func: str, kernel_size: int) -> None:
+        self.func = func
+        self.kernel = np.ones((kernel_size, kernel_size), np.uint8)
+
+    def __call__(self, x: Tensor) -> Any:
+
+        for i in range(x.shape[0]):
+            if self.func == "opening":
+                x[i] = cv2.morphologyEx(x[i], cv2.MORPH_OPEN, self.kernel)
+            elif self.func == "closing":
+                x[i] = cv2.morphologyEx(x[i], cv2.MORPH_CLOSE, self.kernel)
+            elif self.func == "erosion":
+                x[i] = cv2.erode(x[i], self.kernel, iterations=1)
+            elif self.func == "dilation":
+                x[i] = cv2.dilate(x[i], self.kernel, iterations=1)
+
+        return x
 
 
 def parse_args():
@@ -33,7 +55,7 @@ def parse_args():
 
 
 class Predictor:
-    def __init__(self, model_path: str, x_paths: pd.DataFrame, device: str) -> None:
+    def __init__(self, model_path: str, x_paths: pd.DataFrame, device: str, num_folds: int) -> None:
         """Initializes Predictor class
 
         Parameters
@@ -47,12 +69,12 @@ class Predictor:
         """
 
         self.model_path = model_path
-        self.device = torch.device(device)
+        self.device = device
         self.x_paths = x_paths
 
         self.models = []
         self.configs = []
-        self.num_folds = 5
+        self.num_folds = num_folds
 
         for i in range(self.num_folds):
             path = os.path.join(model_path, f"fold_{i}")
@@ -80,8 +102,10 @@ class Predictor:
 
 
 class TestPredictor(Predictor):
-    def __init__(self, model_path: str, x_paths: pd.DataFrame, device: str, predictions_dir: os.PathLike) -> None:
-        super().__init__(model_path, x_paths, device)
+    def __init__(
+        self, model_path: str, x_paths: pd.DataFrame, device: str, predictions_dir: os.PathLike, num_folds: int = 5
+    ) -> None:
+        super().__init__(model_path, x_paths, device, num_folds)
 
         self.predictions_dir = predictions_dir
 
@@ -93,7 +117,7 @@ class TestPredictor(Predictor):
         self.test_dataloader = torch.utils.data.DataLoader(
             test_dataset,
             batch_size=temp_cfg["experiment"]["val_batch_size"],
-            num_workers=8,
+            num_workers=os.cpu_count(),
             shuffle=False,
             pin_memory=True,
         )
@@ -131,9 +155,15 @@ class TestPredictor(Predictor):
 
 class PseudoLabelsPredictor(Predictor):
     def __init__(
-        self, model_path: str, x_paths: pd.DataFrame, device: str, output_label_path: str, conf_thres: float
+        self,
+        model_path: str,
+        x_paths: pd.DataFrame,
+        device: str,
+        output_label_path: str,
+        conf_thres: float,
+        num_folds: int = 5,
     ) -> None:
-        super().__init__(model_path, x_paths, device)
+        super().__init__(model_path, x_paths, device, num_folds)
 
         temp_cfg = self.configs[0]
 
@@ -214,11 +244,19 @@ class PseudoLabelsPredictor(Predictor):
 
 
 class ValPredictor(Predictor):
-    def __init__(self, model_path: str, device: str, threshold: float = 0.5) -> None:
-        super().__init__(model_path, None, device)
+    def __init__(
+        self, model_path: str, device: str, threshold: float = 0.5, num_folds: int = 5, post_process: Callable = None
+    ) -> None:
+        super().__init__(model_path, None, device, num_folds)
 
         metrcis_config = deepcopy(self.configs[0]["metrics"])
         metrcis_config[0]["params"]["threshold"] = threshold
+
+        self.post_process = post_process
+
+        if self.post_process:
+            metrcis_config[0]["params"]["activation"] = None
+            metrcis_config[0]["params"]["threshold"] = None
 
         self.metrics = load_metrics(metrcis_config)
 
@@ -258,17 +296,27 @@ class ValPredictor(Predictor):
             for batch in tqdm(dataloader):
 
                 x = batch["chip"].to(self.device)
-                y = batch["label"].to(self.device).long()
+                # y = batch["label"].to(self.device).long()
+                y = batch["label"].long()
 
                 if self.tta:
                     batch_pred = self.tta(model, x)
                 else:
                     batch_pred = model(x)
 
+                if self.post_process:
+                    batch_pred = torch.softmax(batch_pred, dim=1)[:, 1].detach().cpu().unsqueeze(dim=1).numpy()
+                    batch_pred = (batch_pred > 0.5).astype("uint8")
+                    batch_pred = torch.tensor(self.post_process(batch_pred))
+
                 for name, metric in self.metrics.items():
                     fold_metrics[name] = fold_metrics.get(name, 0) + metric(batch_pred, y).item() / len(dataloader)
 
             metrics[i] = fold_metrics
+
+            # if i == 0 and fold_metrics["IoU"] < 0.8828757375584806:
+            #     metrics["cv_score_IoU"] = -100
+            #     return metrics
 
             for name, metric_val in fold_metrics.items():
                 print(f"fold: {i}, metric: {name}, val: {metric_val}")
@@ -288,15 +336,17 @@ if __name__ == "__main__":
 
     # x_paths = pd.read_csv("./data/init_folds/0/val.csv")
 
-    logger.info(f"Model: {path.name}")
+    # logger.info(f"Model: {path.name}")
 
     # pred_dir = Path("./predictions")
     # pred_dir.mkdir(exist_ok=True, parents=True)
 
-    # test_predictor = TestPredictor(args.model_path, x_paths, device="cuda", predictions_dir=pred_dir)
+    # test_predictor = TestPredictor(args.model_path, x_paths, device="cuda", predictions_dir=pred_dir, num_folds=1)
     # test_predictor.predict()
 
-    val_predictor = ValPredictor(args.model_path, device="cuda")
+    # postprocess = PostProcess(func="opening", kernel_size=9)
+
+    val_predictor = ValPredictor(args.model_path, device="cuda", num_folds=5)
     metrics = val_predictor.evaluate()
 
     with open(os.path.join(args.model_path, "metrics.json"), "w") as fp:
@@ -305,7 +355,7 @@ if __name__ == "__main__":
     # best = 0.0
     # best_threshold = None
 
-    # for threshold in np.arange(0.45, 0.55, 0.01):
+    # for threshold in np.arange(0.501, 0.5015, 0.0001):
     #     val_predictor = ValPredictor(args.model_path, device="cuda", threshold=threshold)
     #     metrics = val_predictor.evaluate()
 

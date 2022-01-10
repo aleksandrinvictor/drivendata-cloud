@@ -6,6 +6,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 import rasterio
+import yaml
 from tqdm import tqdm
 
 
@@ -71,3 +72,10 @@ if __name__ == "__main__":
     df["hour"] = df.datetime.dt.hour
 
     df.to_csv(os.path.join(args.data_path, "train.csv"), index=False)
+
+    with open(os.path.join(args.data_path, "bad_chips.yml")) as f:
+        bad_chips = yaml.load(f, yaml.Loader)
+
+    init_samples = df[~df["chip_id"].isin(bad_chips["overall"])]
+
+    init_samples.to_csv(os.path.join(args.data_path, "init_samples.csv"), index=False)

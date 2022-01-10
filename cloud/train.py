@@ -13,6 +13,7 @@ from cloud.model import Cloud
 from cloud.utils import build_object
 
 parser = argparse.ArgumentParser()
+parser.add_argument("--cfg_path", type=str)
 parser.add_argument("--fold", type=int, default=0)
 
 
@@ -67,7 +68,8 @@ def train(cfg: Dict[str, Any], fold: int) -> None:
         callbacks=callbacks,
         deterministic=True,
         gradient_clip_val=1.0,
-        # accumulate_grad_batches=4,
+        # precision=16,
+        # accumulate_grad_batches=2,
     )
 
     # # Run learning rate finder
@@ -92,9 +94,9 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format=log_fmt)
     logger = logging.getLogger(__name__)
 
-    with open("config.yml", "r") as f:
-        cfg = yaml.safe_load(f)
-
     args = parser.parse_args()
+
+    with open(args.cfg_path, "r") as f:
+        cfg = yaml.safe_load(f)
 
     train(cfg, args.fold)

@@ -51,7 +51,7 @@ class ModelEMA:
     .. [2] https://www.tensorflow.org/api_docs/python/tf/train/ExponentialMovingAverage
     """
 
-    def __init__(self, model: nn.Module, decay: float = 0.9999, updates: int = 0):
+    def __init__(self, model: nn.Module, decay: float = 0.99998, updates: int = 0):
         """Init EMA."""
         self.ema = deepcopy(model).eval()  # FP32 EMA
         self.updates = updates  # number of EMA updates

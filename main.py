@@ -44,7 +44,7 @@ def get_metadata(features_dir: os.PathLike, bands: List[str]) -> pd.DataFrame:
 
 
 def main(
-    model_weights_path: Path = ASSETS_DIRECTORY / "exp49",
+    model_weights_path: Path = ASSETS_DIRECTORY / "exp102_3_folds",
     test_features_dir: Path = DATA_DIRECTORY / "test_features",
     predictions_dir: Path = PREDICTIONS_DIRECTORY,
     bands: List[str] = ["B02", "B03", "B04", "B08"],
@@ -76,8 +76,11 @@ def main(
     logger.info(f"Found {len(test_metadata)} chips")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info(f"Device: {device}")
 
-    test_predictor = TestPredictor(model_weights_path, test_metadata, device=device, predictions_dir=predictions_dir)
+    test_predictor = TestPredictor(
+        model_weights_path, test_metadata, device=device, predictions_dir=predictions_dir, num_folds=5
+    )
 
     test_predictor.predict()
 

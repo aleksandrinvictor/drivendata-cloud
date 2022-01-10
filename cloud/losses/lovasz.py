@@ -279,4 +279,44 @@ class LovaszLoss:
         Tensor
             lovazh loss
         """
+
         return lovasz_softmax(self.softmax(y_pred), y_true.squeeze())
+
+
+class LovaszLossOHEM:
+    def __init__(self, ratio: float = 0.8) -> None:
+        self.softmax = nn.Softmax(dim=1)
+        self.ratio = ratio
+
+    def __call__(self, y_pred: Tensor, y_true: Tensor) -> Tensor:
+        """
+        Parameters
+        ----------
+        y_pred: Tensor
+            input tensor with shape (batch_size, num_classes, height, width)
+            must sum to 1 over c channel (such as after softmax)
+        y_true: Tensor
+            one hot target tensor with shape
+            (batch_size, num_classes, height, width)
+
+        Returns
+        -------
+        Tensor
+            lovazh loss
+        """
+        num_inst = y_pred.size(0)
+        num_hns = int(self.ratio * num_inst)
+
+        y_pred_copy = y_pred.clone()
+        inst_losses = torch.zeros(num_inst, device="cuda")
+
+        for idx, label in enumerate(y_true):
+            # print(f"y_pred_copy[idx]: {y_pred_copy[idx].shape}")
+            # print(f"label: {label.shape}")
+            inst_losses[idx] = lovasz_softmax(self.softmax(y_pred_copy[idx].unsqueeze(0)), label.unsqueeze(0))
+
+        _, idxs = inst_losses.topk(num_hns)
+        pred_hn = y_pred.index_select(0, idxs)
+        true_hn = y_true.index_select(0, idxs)
+
+        return lovasz_softmax(self.softmax(pred_hn), true_hn.squeeze())
