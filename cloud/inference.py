@@ -296,8 +296,8 @@ class ValPredictor(Predictor):
             for batch in tqdm(dataloader):
 
                 x = batch["chip"].to(self.device)
-                # y = batch["label"].to(self.device).long()
-                y = batch["label"].long()
+                y = batch["label"].to(self.device).long()
+                # y = batch["label"].long()
 
                 if self.tta:
                     batch_pred = self.tta(model, x)

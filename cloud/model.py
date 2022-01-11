@@ -42,7 +42,13 @@ class Cloud(pl.LightningModule):
         if "scheduler" in self.cfg.keys():
             scheduler = build_object(self.cfg["scheduler"], optimizer=optimizer)
 
-            return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
+            scheduler = {
+                "scheduler": scheduler,
+                "interval": self.cfg["experiment"]["scheduler_interval"],
+                "frequency": 1,
+            }
+
+            return {"optimizer": optimizer, "lr_scheduler": scheduler}
         else:
             return {"optimizer": optimizer}
 

@@ -3,6 +3,7 @@ import warnings
 from typing import Any, Dict, List, Optional, Tuple
 
 import albumentations as A
+import cv2
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
@@ -65,11 +66,28 @@ class CloudDataset(Dataset):
         with rasterio.open(img_paths["B04_path"]) as b:
             red = b.read(1).astype("float32")
 
-        blue = minmax_scale_percentile(blue)
-        green = minmax_scale_percentile(green)
-        red = minmax_scale_percentile(red)
+        # with rasterio.open(img_paths["B08_path"]) as b:
+        #     nir = b.read(1).astype("float32")
 
-        return np.stack([red, green, blue], axis=2)
+        # blue = minmax_scale_percentile(blue)
+        # green = minmax_scale_percentile(green)
+        # red = minmax_scale_percentile(red)
+
+        # return np.stack([red, green, blue], axis=2)
+
+        blue = minmax_scale(blue)
+        green = minmax_scale(green)
+        red = minmax_scale(red)
+        # nir = minmax_scale(nir)
+
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+
+        blue = clahe.apply((blue * 255).astype(np.uint8)) / 255.0
+        green = clahe.apply((green * 255).astype(np.uint8)) / 255.0
+        red = clahe.apply((red * 255).astype(np.uint8)) / 255.0
+        # nir = clahe.apply((nir * 255).astype(np.uint8)) / 255.0
+
+        return np.stack([red, green, blue], axis=2).astype("float32")
 
         # band_arrs = []
         # for band in self.bands:

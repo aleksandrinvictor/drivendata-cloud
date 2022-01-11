@@ -76,7 +76,7 @@ def load_augs(cfg: Dict[str, Any]) -> A.Compose:
     for a in cfg:
         if a["class_name"] == "albumentations.OneOf":  # type: ignore
             small_augs = []
-            for small_aug in a["params"]:  # type: ignore
+            for small_aug in a["transforms"]:  # type: ignore
                 # yaml can't contain tuples, so we need to convert manually
                 params = {
                     k: (v if not isinstance(v, list) else tuple(v))
@@ -85,7 +85,10 @@ def load_augs(cfg: Dict[str, Any]) -> A.Compose:
 
                 aug = get_instance(small_aug["class_name"])(**params)  # type: ignore
                 small_augs.append(aug)
-            aug = get_instance(a["class_name"])(small_augs)  # type: ignore
+
+            if "params" in a.keys():  # type: ignore
+                params = {k: (v if type(v) != list else tuple(v)) for k, v in a["params"].items()}  # type: ignore
+            aug = get_instance(a["class_name"])(small_augs, **params)  # type: ignore
             augs.append(aug)
 
         else:

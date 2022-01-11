@@ -54,7 +54,9 @@ def train(cfg: Dict[str, Any], fold: int) -> None:
     )
 
     if "pretrained" in cfg["experiment"].keys():
-        model = Cloud.load_from_checkpoint(checkpoint_path=cfg["experiment"]["pretrained"], cfg=cfg)
+        pretrained_path = cfg["experiment"]["pretrained"]
+        pretrained_path = pretrained_path.replace("fold_0", f"fold_{fold}")
+        model = Cloud.load_from_checkpoint(checkpoint_path=pretrained_path, cfg=cfg)
     else:
         model = Cloud(cfg)
 
