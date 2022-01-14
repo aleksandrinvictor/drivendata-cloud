@@ -127,6 +127,9 @@ class TestPredictor(Predictor):
                 batch_pred = F.interpolate(batch_pred, size=(512, 512), mode="bilinear")
                 batch_pred = torch.softmax(batch_pred, dim=1)[:, 1].detach().cpu().numpy()
 
+                if self.postprocess:
+                    batch_pred = self.postprocess(batch_pred)
+
                 preds.append(batch_pred)
 
             preds = np.stack(preds, axis=0).mean(axis=0)
@@ -323,23 +326,23 @@ if __name__ == "__main__":
 
     path = pathlib.PurePath(args.model_path)
 
-    # x_paths = pd.read_csv("./data/init_folds/0/val.csv")
+    x_paths = pd.read_csv("./data/init_folds/0/val.csv")
 
-    # logger.info(f"Model: {path.name}")
+    logger.info(f"Model: {path.name}")
 
-    # pred_dir = Path("./predictions")
-    # pred_dir.mkdir(exist_ok=True, parents=True)
+    pred_dir = Path("./predictions")
+    pred_dir.mkdir(exist_ok=True, parents=True)
 
-    # test_predictor = TestPredictor(args.model_path, x_paths, device="cuda", predictions_dir=pred_dir, num_folds=1)
-    # test_predictor.predict()
+    test_predictor = TestPredictor(args.model_path, x_paths, device="cuda", predictions_dir=pred_dir, num_folds=5)
+    test_predictor.predict()
 
     # postprocess = PostProcess(func="opening", kernel_size=9)
 
-    val_predictor = ValPredictor(args.model_path, device="cuda", num_folds=5)
-    metrics = val_predictor.evaluate()
+    # val_predictor = ValPredictor(args.model_path, device="cuda", num_folds=5)
+    # metrics = val_predictor.evaluate()
 
-    with open(os.path.join(args.model_path, "metrics.json"), "w") as fp:
-        json.dump(metrics, fp)
+    # with open(os.path.join(args.model_path, "metrics.json"), "w") as fp:
+    #     json.dump(metrics, fp)
 
     # best = 0.0
     # best_threshold = None
