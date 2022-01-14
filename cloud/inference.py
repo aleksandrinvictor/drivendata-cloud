@@ -20,28 +20,9 @@ from tqdm import tqdm
 
 from cloud.dataset import CloudDataset
 from cloud.model import Cloud
+from cloud.postprocess import PostProcess
 from cloud.tta import TTA
 from cloud.utils import build_object, load_augs, load_metrics
-
-
-class PostProcess:
-    def __init__(self, func: str, kernel_size: int) -> None:
-        self.func = func
-        self.kernel = np.ones((kernel_size, kernel_size), np.uint8)
-
-    def __call__(self, x: Tensor) -> Any:
-
-        for i in range(x.shape[0]):
-            if self.func == "opening":
-                x[i] = cv2.morphologyEx(x[i], cv2.MORPH_OPEN, self.kernel)
-            elif self.func == "closing":
-                x[i] = cv2.morphologyEx(x[i], cv2.MORPH_CLOSE, self.kernel)
-            elif self.func == "erosion":
-                x[i] = cv2.erode(x[i], self.kernel, iterations=1)
-            elif self.func == "dilation":
-                x[i] = cv2.dilate(x[i], self.kernel, iterations=1)
-
-        return x
 
 
 def parse_args():
@@ -99,6 +80,10 @@ class Predictor:
         self.tta = None
         if "tta" in self.configs[0]["augmentation"].keys():
             self.tta = TTA(self.configs[0]["augmentation"]["tta"])
+
+        self.postprocess = None
+        if "postprocess" in self.configs[0].keys():
+            self.postprocess = PostProcess(self.configs[0]["postprocess"])
 
 
 class TestPredictor(Predictor):
@@ -206,6 +191,9 @@ class PseudoLabelsPredictor(Predictor):
                 batch_pred = F.interpolate(batch_pred, size=(512, 512), mode="bilinear")
                 batch_pred = torch.softmax(batch_pred, dim=1)[:, 1].detach().cpu().numpy()
 
+                if self.postprocess:
+                    batch_pred = self.postprocess(batch_pred)
+
                 preds.append(batch_pred)
 
             preds = np.stack(preds, axis=0).mean(axis=0).squeeze()
@@ -244,17 +232,15 @@ class PseudoLabelsPredictor(Predictor):
 
 
 class ValPredictor(Predictor):
-    def __init__(
-        self, model_path: str, device: str, threshold: float = 0.5, num_folds: int = 5, post_process: Callable = None
-    ) -> None:
+    def __init__(self, model_path: str, device: str, threshold: float = 0.5, num_folds: int = 5) -> None:
         super().__init__(model_path, None, device, num_folds)
 
         metrcis_config = deepcopy(self.configs[0]["metrics"])
         metrcis_config[0]["params"]["threshold"] = threshold
 
-        self.post_process = post_process
+        # self.post_process = post_process
 
-        if self.post_process:
+        if self.postprocess:
             metrcis_config[0]["params"]["activation"] = None
             metrcis_config[0]["params"]["threshold"] = None
 
@@ -297,17 +283,20 @@ class ValPredictor(Predictor):
 
                 x = batch["chip"].to(self.device)
                 y = batch["label"].to(self.device).long()
-                # y = batch["label"].long()
 
                 if self.tta:
                     batch_pred = self.tta(model, x)
                 else:
                     batch_pred = model(x)
 
-                if self.post_process:
-                    batch_pred = torch.softmax(batch_pred, dim=1)[:, 1].detach().cpu().unsqueeze(dim=1).numpy()
+                if self.postprocess:
+                    batch_pred = torch.softmax(batch_pred, dim=1)[:, 1].detach().cpu().numpy()
+
+                    batch_pred = self.postprocess(batch_pred)
+
                     batch_pred = (batch_pred > 0.5).astype("uint8")
-                    batch_pred = torch.tensor(self.post_process(batch_pred))
+                    batch_pred = torch.tensor(batch_pred).unsqueeze(dim=1)
+                    y = y.to("cpu")
 
                 for name, metric in self.metrics.items():
                     fold_metrics[name] = fold_metrics.get(name, 0) + metric(batch_pred, y).item() / len(dataloader)
