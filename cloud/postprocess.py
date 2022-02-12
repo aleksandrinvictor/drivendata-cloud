@@ -130,6 +130,7 @@ class TripletRule:
         min_area: int = 2,
         patches_threshold: float = 0.8,
         pixel_threshold: float = 0.4,
+        num_iters: int = 1,
     ) -> None:
 
         self.image_size = image_size
@@ -146,6 +147,8 @@ class TripletRule:
         self.min_area = min_area
         self.patches_threshold = patches_threshold
         self.pixel_threshold = pixel_threshold
+
+        self.num_iters = num_iters
 
     def _process_mask(self, mask: np.ndarray) -> np.ndarray:
         cropped_mask = mask[self.crop : self.image_size - self.crop, self.crop : self.image_size - self.crop]
@@ -184,8 +187,9 @@ class TripletRule:
 
     def __call__(self, input: np.ndarray) -> np.ndarray:
 
-        for i in range(input.shape[0]):
-            input[i] = self._process_mask(input[i])
+        for _ in range(self.num_iters):
+            for i in range(input.shape[0]):
+                input[i] = self._process_mask(input[i])
 
         return input
 

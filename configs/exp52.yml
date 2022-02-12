@@ -1,0 +1,157 @@
+experiment:
+  id: exp52
+  fold: 0
+  datapath: ./data/pseudo_labels_3_folds
+  train_batch_size: 8
+  val_batch_size: 8
+  max_epochs: 30
+  num_workers: 10
+  profiler: false
+  scheduler_step: batch
+  seed: 42
+  device: cuda
+  ema: False
+
+model:
+  class_name: cloud.models.Unet
+  params:
+    backbone: resnet50
+    checkpoint_path: ./pretrained_models/resnet50.pth
+
+criterion:
+  class_name: cloud.losses.lovasz.LovaszLoss
+
+optimizer:
+  class_name: torch.optim.Adam
+  params:
+    lr: 0.00001
+    weight_decay: 0.00001
+
+scheduler:
+  class_name: torch.optim.lr_scheduler.CosineAnnealingLR
+  params:
+    T_max: 30
+    last_epoch: -1
+    eta_min: 0.000001
+
+callbacks:
+  - class_name: pytorch_lightning.callbacks.EarlyStopping
+    params:
+      monitor: 'val_IoU'
+      patience: 10
+      mode: max
+      verbose: True
+  - class_name: pytorch_lightning.callbacks.ModelCheckpoint
+    params:
+      dirpath: ./assets/exp0/fold_0/checkpoints
+      monitor: 'val_IoU'
+      mode: max
+      save_top_k: 1
+      filename: 'best'
+      save_weights_only: True
+  - class_name: pytorch_lightning.callbacks.LearningRateMonitor
+    params:
+      logging_interval: epoch
+
+augmentation:
+  train:
+  - class_name: albumentations.Resize
+    params:
+      height: 256
+      width: 256
+      p: 1.0
+  - class_name: albumentations.HorizontalFlip
+    params:
+      p: 0.5
+  - class_name: albumentations.VerticalFlip
+    params:
+      p: 0.5
+  # - class_name: albumentations.RandomRotate90
+  #   params:
+  #     p: 0.4
+  # - class_name: albumentations.Transpose
+  #   params:
+  #     p: 0.4
+  # - class_name: albumentations.ShiftScaleRotate
+  #   params:
+  #     shift_limit: 0.0625 
+  #     scale_limit: 0.2 
+  #     rotate_limit: 45 
+  #     p: 0.2
+  # - class_name: albumentations.OneOf
+  #   transforms:
+  #     - class_name: albumentations.RandomContrast
+  #       params:
+  #         p: 1.0
+  #     # - class_name: albumentations.RandomGamma
+  #     #   params:
+  #     #     p: 1.0
+  #     - class_name: albumentations.RandomBrightness
+  #       params:
+  #         p: 1.0
+    params:
+      p: 0.3
+  - class_name: albumentations.Normalize
+    params:
+      mean: [0.34035977429201636, 0.3364873570117102, 0.32115959143162537]
+      std: [0.19486441928139522, 0.190782342676511, 0.19202036947511614]
+      max_pixel_value: 1.0
+  - class_name: albumentations.pytorch.ToTensorV2
+    params:
+      transpose_mask: True
+  val:
+  - class_name: albumentations.Resize
+    params:
+      height: 256
+      width: 256
+      always_apply: True
+  - class_name: albumentations.Normalize
+    params:
+      mean: [0.34035977429201636, 0.3364873570117102, 0.32115959143162537]
+      std: [0.19486441928139522, 0.190782342676511, 0.19202036947511614]
+      max_pixel_value: 1.0
+  - class_name: albumentations.pytorch.ToTensorV2
+    params:
+      transpose_mask: True
+  test:
+  - class_name: albumentations.Resize
+    params:
+      height: 256
+      width: 256
+      always_apply: True
+  - class_name: albumentations.Normalize
+    params:
+      mean: [0.34035977429201636, 0.3364873570117102, 0.32115959143162537]
+      std: [0.19486441928139522, 0.190782342676511, 0.19202036947511614]
+      max_pixel_value: 1.0
+  - class_name: albumentations.pytorch.ToTensorV2
+  # cutmix:
+  #   class_name: cloud.batch_augs.CutMix
+  #   params:
+  #     num_boxes: 3
+  #     beta: 1.35
+  #     lam_min: 0.89
+  #     lam_max: 0.97
+  #     p: 0.5
+  tta:
+  - class_name: cloud.tta.Flip
+    params:
+      orientation: horizontal
+  - class_name: cloud.tta.Rotate
+    params:
+      angles:
+      - 90.0
+      - 180.0
+      - 270.0
+
+metrics:
+- class_name: cloud.metrics.IoU
+  name: IoU
+  params:
+    activation: softmax
+
+logger:
+  class_name: pytorch_lightning.loggers.WandbLogger
+  params:
+    project: "cloud"
+    # mode: "disabled"

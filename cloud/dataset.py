@@ -1,6 +1,6 @@
 import os
 import warnings
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import albumentations as A
 import cv2
@@ -10,6 +10,11 @@ import pytorch_lightning as pl
 import rasterio
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
+import random
+import torch
+import torchvision
+from torchvision import transforms
+from torchvision.transforms import functional as TF
 
 from cloud.utils import load_augs
 
@@ -66,41 +71,20 @@ class CloudDataset(Dataset):
         with rasterio.open(img_paths["B04_path"]) as b:
             red = b.read(1).astype("float32")
 
-        # with rasterio.open(img_paths["B08_path"]) as b:
-        #     nir = b.read(1).astype("float32")
-
-        # blue = minmax_scale_percentile(blue)
-        # green = minmax_scale_percentile(green)
-        # red = minmax_scale_percentile(red)
-
-        # return np.stack([red, green, blue], axis=2)
-
-        blue = minmax_scale(blue)
-        green = minmax_scale(green)
-        red = minmax_scale(red)
-        # nir = minmax_scale(nir)
-
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-
-        blue = clahe.apply((blue * 255).astype(np.uint8)) / 255.0
-        green = clahe.apply((green * 255).astype(np.uint8)) / 255.0
-        red = clahe.apply((red * 255).astype(np.uint8)) / 255.0
-        # nir = clahe.apply((nir * 255).astype(np.uint8)) / 255.0
+        blue = minmax_scale_percentile(blue)
+        green = minmax_scale_percentile(green)
+        red = minmax_scale_percentile(red)
 
         return np.stack([red, green, blue], axis=2).astype("float32")
 
-        # band_arrs = []
-        # for band in self.bands:
+    def _load_nir(self, idx: int) -> np.ndarray:
+        img_paths = self.data.loc[idx]
+        with rasterio.open(img_paths["B08_path"]) as b:
+            nir = b.read(1).astype("float32")
 
-        #     # WARNING. SKIPPING BAND!!!
-        #     if band == "B08":
-        #         continue
+        nir = minmax_scale_percentile(nir)
 
-        #     with rasterio.open(img_paths[f"{band}_path"]) as b:
-        #         band_arr = b.read(1).astype("float32")
-        #     band_arrs.append(band_arr)
-
-        # return np.stack(band_arrs, axis=-1)
+        return nir
 
     def _load_mask(self, idx: int) -> np.ndarray:
         assert isinstance(self.label, pd.DataFrame)
@@ -114,7 +98,6 @@ class CloudDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, Tensor]:
         # Loads an n-channel image from a chip-level dataframe
-
         image = self._load_image(idx)
 
         if self.label is None:
@@ -140,6 +123,139 @@ class CloudDataset(Dataset):
         return item
 
 
+class GridDataset(CloudDataset):
+    def __getitem__(self, idx: int) -> Dict[str, Tensor]:
+        # probs = self.data["sampling_prob"].values
+
+        # indices = [idx] + np.random.choice(len(self), 3, p=probs).tolist()
+
+        indices = [idx] + random.choices(range(len(self)), k=3)
+
+        img_grid = torch.zeros(3, 256, 256)
+        mask_grid = torch.zeros(1, 256, 256)
+
+        yc = random.randint(16, 240)
+        xc = random.randint(16, 240)
+
+        start_row_indexes = np.array([0, 0, yc, yc])
+        end_row_indexes = np.array([yc, yc, 256, 256])
+
+        start_col_indexes = np.array([0, xc, 0, xc])
+        end_col_indexes = np.array([xc, 256, xc, 256])
+
+        len_x = end_row_indexes - start_row_indexes
+        len_y = end_col_indexes - start_col_indexes
+
+        for i in range(4):
+            item = super().__getitem__(indices[i])
+
+            if i == 0:
+                chip_id = item["chip_id"]
+
+            y1, y2 = start_row_indexes[i], end_row_indexes[i]
+            x1, x2 = start_col_indexes[i], end_col_indexes[i]
+
+            i, j, h, w = transforms.RandomCrop.get_params(item["chip"], output_size=(len_x[i], len_y[i]))
+
+            img_grid[:, y1:y2, x1:x2] = TF.crop(item["chip"], i, j, h, w)
+            mask_grid[:, y1:y2, x1:x2] = TF.crop(item["label"], i, j, h, w)
+
+        return {"chip": img_grid, "label": mask_grid, "chip_id": chip_id}
+
+
+class MosaicDataset(CloudDataset):
+    def __getitem__(self, idx: int) -> Dict[str, Tensor]:
+
+        # probs = self.data["sampling_prob"].values
+
+        # indices = [idx] + np.random.choice(len(self), 3, p=probs).tolist()
+
+        indices = [idx] + random.choices(range(len(self)), k=3)
+
+        img_grid = torch.zeros(3, 256, 256)
+        mask_grid = torch.zeros(1, 256, 256)
+
+        yc = random.randint(32, 224)
+        xc = random.randint(32, 224)
+
+        start_row_indexes = np.array([0, 0, yc, yc])
+        end_row_indexes = np.array([yc, yc, 256, 256])
+
+        start_col_indexes = np.array([0, xc, 0, xc])
+        end_col_indexes = np.array([xc, 256, xc, 256])
+
+        len_x = end_row_indexes - start_row_indexes
+        len_y = end_col_indexes - start_col_indexes
+
+        for cell_idx in range(4):
+            item = super().__getitem__(indices[cell_idx])
+
+            if cell_idx == 0:
+                chip_id = item["chip_id"]
+
+            y1, y2 = start_row_indexes[cell_idx], end_row_indexes[cell_idx]
+            x1, x2 = start_col_indexes[cell_idx], end_col_indexes[cell_idx]
+
+            i, j, h, w = transforms.RandomResizedCrop.get_params(item["chip"], scale=(0.9, 1.0), ratio=(1.0, 1.0))
+
+            img_grid[:, y1:y2, x1:x2] = TF.resized_crop(
+                item["chip"], i, j, h, w, size=(len_x[cell_idx], len_y[cell_idx])
+            )
+            mask_grid[:, y1:y2, x1:x2] = TF.resized_crop(
+                item["label"], i, j, h, w, size=(len_x[cell_idx], len_y[cell_idx])
+            )
+
+        return {"chip": img_grid, "label": mask_grid, "chip_id": chip_id}
+
+
+class ChessMixDataset(CloudDataset):
+    def __getitem__(self, idx: int) -> Dict[str, Tensor]:
+
+        # probs = self.data["sampling_prob"].values
+
+        # indices = [idx] + np.random.choice(len(self), 7, p=probs).tolist()
+
+        indices = [idx] + random.choices(range(len(self)), k=7)
+
+        img_grid = torch.zeros(3, 256, 256)
+        mask_grid = torch.zeros(1, 256, 256)
+
+        start_row_indexes = np.array([0, 0, 64, 64, 128, 128, 192, 192])
+        end_row_indexes = np.array([64, 64, 128, 128, 192, 192, 256, 256])
+
+        start_col_indexes = np.array([0, 128, 64, 192, 0, 128, 64, 192])
+        end_col_indexes = np.array([64, 192, 128, 256, 64, 192, 128, 256])
+
+        len_x = end_row_indexes - start_row_indexes
+        len_y = end_col_indexes - start_col_indexes
+
+        reverse_index_img = torch.arange(3, -1, -1)
+        reverse_index_mask = torch.arange(1, -1, -1)
+
+        for cell_idx in range(8):
+            item = super().__getitem__(indices[cell_idx])
+
+            if cell_idx == 0:
+                chip_id = item["chip_id"]
+
+            y1, y2 = start_row_indexes[cell_idx], end_row_indexes[cell_idx]
+            x1, x2 = start_col_indexes[cell_idx], end_col_indexes[cell_idx]
+
+            i, j, h, w = transforms.RandomCrop.get_params(item["chip"], output_size=(len_x[cell_idx], len_y[cell_idx]))
+
+            img_grid[:, y1:y2, x1:x2] = TF.crop(item["chip"], i, j, h, w)
+            mask_grid[:, y1:y2, x1:x2] = TF.crop(item["label"], i, j, h, w)
+
+            if cell_idx in [0, 1, 4, 5]:
+                img_grid[:, y1:y2, x1 + 64 : x2 + 64] = TF.hflip(img_grid[:, y1:y2, x1:x2])
+                mask_grid[:, y1:y2, x1 + 64 : x2 + 64] = -1
+            else:
+                img_grid[:, y1:y2, x1 - 64 : x2 - 64] = TF.hflip(img_grid[:, y1:y2, x1:x2])
+                mask_grid[:, y1:y2, x1 - 64 : x2 - 64] = -1
+
+        return {"chip": img_grid, "label": mask_grid, "chip_id": chip_id}
+
+
 class CloudDataModule(pl.LightningDataModule):
     """Class for stroing dataloaders"""
 
@@ -162,9 +278,8 @@ class CloudDataModule(pl.LightningDataModule):
         """
 
         bands = ["B02", "B03", "B04", "B08"]
-        # basepath = os.path.join(self.cfg["experiment"]["datapath"], "folds")
         basepath = self.cfg["experiment"]["datapath"]
-        feature_cols = ["chip_id"] + [f"{band}_path" for band in bands]
+        feature_cols = ["chip_id", "coverage"] + [f"{band}_path" for band in bands]
 
         if stage == "fit" or stage is None:
 

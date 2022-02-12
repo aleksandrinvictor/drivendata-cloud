@@ -1,6 +1,8 @@
 import argparse
 import logging
 import os
+from re import M
+from statistics import mode
 from typing import Any, Dict
 
 import torch
@@ -11,6 +13,10 @@ from pytorch_lightning import Trainer, seed_everything
 from cloud.dataset import CloudDataModule
 from cloud.model import Cloud
 from cloud.utils import build_object
+import torch.nn as nn
+from cloud.models.crf import ConvCRF, cloud_conf
+from cloud.models import UnetCRF
+from copy import copy
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--cfg_path", type=str)
@@ -20,6 +26,14 @@ parser.add_argument("--fold", type=int, default=0)
 def train(cfg: Dict[str, Any], fold: int) -> None:
 
     cfg["experiment"]["fold"] = fold
+
+    if "ensemble" in cfg["experiment"]["id"]:
+        models_paths = []
+
+        for p in cfg["model"]["params"]["model_paths"]:
+            models_paths.append(os.path.join(p, f"fold_{fold}"))
+
+        cfg["model"]["params"]["model_paths"] = models_paths
 
     exp_path = f"./assets/{cfg['experiment']['id']}/fold_{fold}"
     cfg["callbacks"][1]["params"]["dirpath"] = os.path.join(exp_path, "checkpoints")
@@ -56,7 +70,12 @@ def train(cfg: Dict[str, Any], fold: int) -> None:
     if "pretrained" in cfg["experiment"].keys():
         pretrained_path = cfg["experiment"]["pretrained"]
         pretrained_path = pretrained_path.replace("fold_0", f"fold_{fold}")
-        model = Cloud.load_from_checkpoint(checkpoint_path=pretrained_path, cfg=cfg)
+
+        model = Cloud.load_from_checkpoint(checkpoint_path=pretrained_path, cfg=cfg, strict=False)
+
+        for p in model.model.model.parameters():
+            p.requires_grad = False
+
     else:
         model = Cloud(cfg)
 
@@ -71,7 +90,7 @@ def train(cfg: Dict[str, Any], fold: int) -> None:
         deterministic=True,
         gradient_clip_val=1.0,
         # precision=16,
-        # accumulate_grad_batches=2,
+        # accumulate_grad_batches=4,
     )
 
     # # Run learning rate finder

@@ -7,6 +7,7 @@ from torch.tensor import Tensor
 from cloud.batch_augs import CutMix
 from cloud.ema import ModelEMA
 from cloud.utils import build_object, load_metrics
+import torch.nn as nn
 
 
 class Cloud(pl.LightningModule):
@@ -65,6 +66,7 @@ class Cloud(pl.LightningModule):
 
         x = batch["chip"]
         y = batch["label"].long()
+        # print(batch.keys())
 
         out = self.model(x)
 

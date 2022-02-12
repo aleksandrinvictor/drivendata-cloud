@@ -1,0 +1,114 @@
+experiment:
+  id: exp51_49_ensemble
+  fold: 0
+  datapath: ./data/pseudo_labels_3_folds
+  train_batch_size: 8
+  val_batch_size: 8
+  max_epochs: 3
+  num_workers: 10
+  profiler: false
+  scheduler_interval: epoch
+  seed: 42
+  device: cuda
+  ema: False
+
+model:
+  class_name: cloud.models.LinearEnsembler
+  params:
+    model_paths: ["./assets/exp51", "./assets/exp49"]
+    device: cuda
+
+criterion:
+  class_name: cloud.losses.lovasz.LovaszLoss
+
+optimizer:
+  class_name: torch.optim.Adam
+  params:
+    lr: 0.000001
+    weight_decay: 0.00001
+
+scheduler:
+  class_name: torch.optim.lr_scheduler.CosineAnnealingLR
+  params:
+    T_max: 3
+    last_epoch: -1
+    eta_min: 0.000001
+
+callbacks:
+  - class_name: pytorch_lightning.callbacks.EarlyStopping
+    params:
+      monitor: 'val_IoU'
+      patience: 10
+      mode: max
+      verbose: True
+  - class_name: pytorch_lightning.callbacks.ModelCheckpoint
+    params:
+      dirpath: ./assets/exp0/fold_0/checkpoints
+      monitor: 'val_IoU'
+      mode: max
+      save_top_k: 1
+      filename: 'best'
+      save_weights_only: True
+  - class_name: pytorch_lightning.callbacks.LearningRateMonitor
+    params:
+      logging_interval: epoch
+
+augmentation:
+  train:
+  - class_name: albumentations.Resize
+    params:
+      height: 256
+      width: 256
+      p: 1.0
+  - class_name: albumentations.HorizontalFlip
+    params:
+      p: 0.5
+  - class_name: albumentations.VerticalFlip
+    params:
+      p: 0.5
+  - class_name: albumentations.Normalize
+    params:
+      mean: [0.3435823, 0.34141567, 0.32860598]
+      std: [0.26375622, 0.26217863, 0.2664461]
+      max_pixel_value: 1.0
+  - class_name: albumentations.pytorch.ToTensorV2
+    params:
+      transpose_mask: True
+  val:
+  - class_name: albumentations.Resize
+    params:
+      height: 256
+      width: 256
+      always_apply: True
+  - class_name: albumentations.Normalize
+    params:
+      mean: [0.3435823, 0.34141567, 0.32860598]
+      std: [0.26375622, 0.26217863, 0.2664461]
+      max_pixel_value: 1.0
+  - class_name: albumentations.pytorch.ToTensorV2
+    params:
+      transpose_mask: True
+  test:
+  - class_name: albumentations.Resize
+    params:
+      height: 256
+      width: 256
+      always_apply: True
+  - class_name: albumentations.Normalize
+    params:
+      mean: [0.3435823, 0.34141567, 0.32860598]
+      std: [0.26375622, 0.26217863, 0.2664461]
+      max_pixel_value: 1.0
+  - class_name: albumentations.pytorch.ToTensorV2
+
+metrics:
+- class_name: cloud.metrics.IoU
+  name: IoU
+  params:
+    activation: softmax
+
+logger:
+  class_name: pytorch_lightning.loggers.WandbLogger
+  params:
+    project: "cloud"
+    # mode: "disabled"

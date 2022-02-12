@@ -1,21 +1,19 @@
 import argparse
-import json
 import logging
 import os
 import pathlib
 from copy import deepcopy
 from glob import glob
 from pathlib import Path
-from typing import Any, Callable, Dict
 
-import cv2
+from typing import Any, Dict, List, Union
+import json
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
 import yaml
 from PIL import Image
-from torch import Tensor
 from tqdm import tqdm
 
 from cloud.dataset import CloudDataset
@@ -23,6 +21,7 @@ from cloud.model import Cloud
 from cloud.postprocess import PostProcess
 from cloud.tta import TTA
 from cloud.utils import build_object, load_augs, load_metrics
+from torch.utils.data import DataLoader
 
 
 def parse_args():
@@ -50,6 +49,7 @@ class Predictor:
         """
 
         self.model_path = model_path
+
         self.device = device
         self.x_paths = x_paths
 
@@ -124,7 +124,7 @@ class TestPredictor(Predictor):
                 else:
                     batch_pred = model(x)
 
-                batch_pred = F.interpolate(batch_pred, size=(512, 512), mode="bilinear")
+                # batch_pred = F.interpolate(batch_pred, size=(512, 512), mode="bilinear")
                 batch_pred = torch.softmax(batch_pred, dim=1)[:, 1].detach().cpu().numpy()
 
                 if self.postprocess:
@@ -317,6 +317,69 @@ class ValPredictor(Predictor):
         return metrics
 
 
+def make_dataloader(cfg: Dict[str, Any], fold: int) -> torch.utils.data.DataLoader:
+    val_augs = load_augs(cfg["augmentation"]["val"])
+
+    x_paths = pd.read_csv(os.path.join(cfg["experiment"]["datapath"], f"{fold}/val.csv"))
+
+    dataset = CloudDataset(x_paths=x_paths, y_paths=x_paths, bands=["B02", "B03", "B04", "B08"], transforms=val_augs)
+    return torch.utils.data.DataLoader(
+        dataset,
+        batch_size=cfg["experiment"]["val_batch_size"],
+        num_workers=8,
+        shuffle=False,
+        pin_memory=True,
+    )
+
+
+def eval_ensemble(model_paths: List[str], device: str = "cuda") -> None:
+    predictors: List[Predictor] = []
+
+    for path in model_paths:
+        predictors.append(Predictor(path, x_paths=None, device="cuda", num_folds=5))
+
+    metrics_config = deepcopy(predictors[0].configs[0]["metrics"])
+    metrics = load_metrics(metrics_config)
+
+    num_folds = predictors[0].num_folds
+
+    metrics_dict: Dict[Any, Any] = {i: {} for i in range(num_folds)}
+
+    for i in range(num_folds):
+
+        fold_metrics = {}
+
+        cfg = predictors[0].configs[0]
+        dataloader = make_dataloader(cfg, i)
+        models = [p.models[i] for p in predictors]
+
+        for batch in tqdm(dataloader):
+
+            x = batch["chip"].to(device)
+            y = batch["label"].to(device).long()
+
+            final_batch_pred = 0
+
+            for j, model in enumerate(models):
+                if predictors[j].tta:
+                    final_batch_pred += predictors[j].tta(model, x)
+                else:
+                    final_batch_pred += model(x)
+
+            final_batch_pred /= len(models)
+
+            for name, metric in metrics.items():
+                fold_metrics[name] = fold_metrics.get(name, 0) + metric(final_batch_pred, y).item() / len(dataloader)
+
+        metrics_dict[i] = fold_metrics
+
+        for name, metric_val in fold_metrics.items():
+            print(f"fold: {i}, metric: {name}, val: {metric_val}")
+            metrics_dict[f"cv_score_{name}"] = metrics_dict.get(f"cv_score_{name}", 0) + metric_val / num_folds
+
+    return metrics_dict
+
+
 if __name__ == "__main__":
     log_fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     logging.basicConfig(level=logging.INFO, format=log_fmt)
@@ -326,38 +389,18 @@ if __name__ == "__main__":
 
     path = pathlib.PurePath(args.model_path)
 
-    x_paths = pd.read_csv("./data/init_folds/0/val.csv")
+    # x_paths = pd.read_csv("./data/init_folds/0/val.csv")
 
     logger.info(f"Model: {path.name}")
 
-    pred_dir = Path("./predictions")
-    pred_dir.mkdir(exist_ok=True, parents=True)
+    # pred_dir = Path("./predictions")
+    # pred_dir.mkdir(exist_ok=True, parents=True)
 
-    test_predictor = TestPredictor(args.model_path, x_paths, device="cuda", predictions_dir=pred_dir, num_folds=5)
-    test_predictor.predict()
+    # test_predictor = TestPredictor(args.model_path, x_paths, device="cuda", predictions_dir=pred_dir, num_folds=5)
+    # test_predictor.predict()
 
-    # postprocess = PostProcess(func="opening", kernel_size=9)
+    val_predictor = ValPredictor(args.model_path, device="cuda", num_folds=5)
+    metrics = val_predictor.evaluate()
 
-    # val_predictor = ValPredictor(args.model_path, device="cuda", num_folds=5)
-    # metrics = val_predictor.evaluate()
+    print(metrics)
 
-    # with open(os.path.join(args.model_path, "metrics.json"), "w") as fp:
-    #     json.dump(metrics, fp)
-
-    # best = 0.0
-    # best_threshold = None
-
-    # for threshold in np.arange(0.501, 0.5015, 0.0001):
-    #     val_predictor = ValPredictor(args.model_path, device="cuda", threshold=threshold)
-    #     metrics = val_predictor.evaluate()
-
-    #     cv_score = metrics["cv_score_IoU"]
-
-    #     if best < cv_score:
-    #         best = cv_score
-    #         best_threshold = threshold
-
-    #     print(f"threshold: {threshold}, metric: {cv_score}, best_metric: {best} (threshold: {best_threshold})")
-
-    # with open(os.path.join(args.model_path, "metrics.json"), "w") as fp:
-    #     json.dump(metrics, fp)

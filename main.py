@@ -44,7 +44,7 @@ def get_metadata(features_dir: os.PathLike, bands: List[str]) -> pd.DataFrame:
 
 
 def main(
-    model_weights_path: Path = ASSETS_DIRECTORY / "exp105_stage1",
+    model_weights_path: Path = ASSETS_DIRECTORY / "exp110_111_112_ensemble_unet_3",
     test_features_dir: Path = DATA_DIRECTORY / "test_features",
     predictions_dir: Path = PREDICTIONS_DIRECTORY,
     bands: List[str] = ["B02", "B03", "B04", "B08"],
