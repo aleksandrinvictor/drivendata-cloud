@@ -1,9 +1,9 @@
 experiment:
-  id: exp50
+  id: exp102
   fold: 0
-  datapath: ./data/pseudo_labels_3_folds
-  train_batch_size: 8
-  val_batch_size: 8
+  datapath: ./data/pseudo_labels_3
+  train_batch_size: 32
+  val_batch_size: 32
   max_epochs: 30
   num_workers: 10
   profiler: false
@@ -11,7 +11,6 @@ experiment:
   seed: 42
   device: cuda
   ema: False
-  # pretrained: assets/exp40/fold_0/checkpoints/best.ckpt
 
 model:
   class_name: cloud.models.Unet
@@ -19,8 +18,6 @@ model:
     backbone: timm-resnest50d
     checkpoint_path: ./pretrained_models/resnest50.pth
 
-# criterion:
-#   class_name: cloud.loss.BceDiceLoss
 
 criterion:
   class_name: cloud.losses.lovasz.LovaszLoss
@@ -28,7 +25,7 @@ criterion:
 optimizer:
   class_name: torch.optim.Adam
   params:
-    lr: 0.00001
+    lr: 0.00004
     weight_decay: 0.00001
 
 scheduler:
@@ -73,8 +70,8 @@ augmentation:
   train:
   - class_name: albumentations.Resize
     params:
-      height: 256
-      width: 256
+      height: 512
+      width: 512
       p: 1.0
   - class_name: albumentations.HorizontalFlip
     params:
@@ -82,17 +79,7 @@ augmentation:
   - class_name: albumentations.VerticalFlip
     params:
       p: 0.5
-  # - class_name: albumentations.RandomRotate90
-  #   params:
-  #     p: 0.5
-  # - class_name: albumentations.Transpose
-  #   params:
-  #     p: 0.5
   - class_name: albumentations.Normalize
-    # params:
-    #   mean: [0.5, 0.5, 0.5]
-    #   std: [0.25, 0.25, 0.25]
-    #   max_pixel_value: 1.0
     params:
       mean: [0.3435823, 0.34141567, 0.32860598]
       std: [0.26375622, 0.26217863, 0.2664461]
@@ -103,14 +90,10 @@ augmentation:
   val:
   - class_name: albumentations.Resize
     params:
-      height: 256
-      width: 256
+      height: 512
+      width: 512
       always_apply: True
   - class_name: albumentations.Normalize
-    # params:
-    #   mean: [0.5, 0.5, 0.5]
-    #   std: [0.25, 0.25, 0.25]
-    #   max_pixel_value: 1.0
     params:
       mean: [0.3435823, 0.34141567, 0.32860598]
       std: [0.26375622, 0.26217863, 0.2664461]
@@ -121,37 +104,19 @@ augmentation:
   test:
   - class_name: albumentations.Resize
     params:
-      height: 256
-      width: 256
+      height: 512
+      width: 512
       always_apply: True
   - class_name: albumentations.Normalize
-    # params:
-    #   mean: [0.5, 0.5, 0.5]
-    #   std: [0.25, 0.25, 0.25]
-    #   max_pixel_value: 1.0
     params:
       mean: [0.3435823, 0.34141567, 0.32860598]
       std: [0.26375622, 0.26217863, 0.2664461]
       max_pixel_value: 1.0
   - class_name: albumentations.pytorch.ToTensorV2
-  # cutmix:
-  #   class_name: cloud.batch_augs.CutMix
-  #   params:
-  #     num_boxes: 3
-  #     beta: 1.35
-  #     lam_min: 0.89
-  #     lam_max: 0.97
-  #     p: 0.5
   tta:
   - class_name: cloud.tta.Flip
     params:
-      orientation: horizontal
-  - class_name: cloud.tta.Rotate
-    params:
-      angles:
-      - 90.0
-      - 180.0
-      - 270.0
+      orientation: vertical
 
 metrics:
 - class_name: cloud.metrics.IoU
@@ -163,4 +128,3 @@ logger:
   class_name: pytorch_lightning.loggers.WandbLogger
   params:
     project: "cloud"
-    # mode: "disabled"
