@@ -1,18 +1,16 @@
 import os
+import random
 import warnings
 from typing import Any, Dict, List, Optional
 
 import albumentations as A
-import cv2
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import rasterio
+import torch
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
-import random
-import torch
-import torchvision
 from torchvision import transforms
 from torchvision.transforms import functional as TF
 
@@ -125,9 +123,6 @@ class CloudDataset(Dataset):
 
 class GridDataset(CloudDataset):
     def __getitem__(self, idx: int) -> Dict[str, Tensor]:
-        # probs = self.data["sampling_prob"].values
-
-        # indices = [idx] + np.random.choice(len(self), 3, p=probs).tolist()
 
         indices = [idx] + random.choices(range(len(self)), k=3)
 
@@ -165,10 +160,6 @@ class GridDataset(CloudDataset):
 
 class MosaicDataset(CloudDataset):
     def __getitem__(self, idx: int) -> Dict[str, Tensor]:
-
-        # probs = self.data["sampling_prob"].values
-
-        # indices = [idx] + np.random.choice(len(self), 3, p=probs).tolist()
 
         indices = [idx] + random.choices(range(len(self)), k=3)
 
@@ -211,10 +202,6 @@ class MosaicDataset(CloudDataset):
 class ChessMixDataset(CloudDataset):
     def __getitem__(self, idx: int) -> Dict[str, Tensor]:
 
-        # probs = self.data["sampling_prob"].values
-
-        # indices = [idx] + np.random.choice(len(self), 7, p=probs).tolist()
-
         indices = [idx] + random.choices(range(len(self)), k=7)
 
         img_grid = torch.zeros(3, 256, 256)
@@ -228,9 +215,6 @@ class ChessMixDataset(CloudDataset):
 
         len_x = end_row_indexes - start_row_indexes
         len_y = end_col_indexes - start_col_indexes
-
-        reverse_index_img = torch.arange(3, -1, -1)
-        reverse_index_mask = torch.arange(1, -1, -1)
 
         for cell_idx in range(8):
             item = super().__getitem__(indices[cell_idx])

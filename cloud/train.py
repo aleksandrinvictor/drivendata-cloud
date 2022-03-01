@@ -1,8 +1,6 @@
 import argparse
 import logging
 import os
-from re import M
-from statistics import mode
 from typing import Any, Dict
 
 import torch
@@ -13,10 +11,6 @@ from pytorch_lightning import Trainer, seed_everything
 from cloud.dataset import CloudDataModule
 from cloud.model import Cloud
 from cloud.utils import build_object
-import torch.nn as nn
-from cloud.models.crf import ConvCRF, cloud_conf
-from cloud.models import UnetCRF
-from copy import copy
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--cfg_path", type=str)

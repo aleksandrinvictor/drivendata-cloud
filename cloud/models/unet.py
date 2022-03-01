@@ -4,9 +4,9 @@ import segmentation_models_pytorch as smp
 import torch
 import torch.nn as nn
 from torch import Tensor
-import torch.nn as nn
-from .fpa import FeaturePyramidAttention
+
 from .crf import GaussCRF, cloud_conf
+from .fpa import FeaturePyramidAttention
 from .refinement import RefimentLayer
 
 
@@ -17,10 +17,6 @@ class Unet(nn.Module):
         self.model = smp.Unet(encoder_name=backbone, encoder_weights=None, in_channels=3, classes=2)
 
         if checkpoint_path:
-            # if "tu" in backbone:
-            #     checkpoint = torch.load(checkpoint_path)
-            #     self.model.encoder.model.load_state_dict(checkpoint)
-            # else:
             checkpoint = torch.load(checkpoint_path)
             self.model.encoder.load_state_dict(checkpoint)
 
@@ -82,5 +78,4 @@ class UnetCRF(nn.Module):
 
     def forward(self, inputs: Tensor) -> Tensor:
         model_out = self.model(inputs)
-        # print(model_out.shape)
         return self.crf(model_out, inputs)

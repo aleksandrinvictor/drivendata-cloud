@@ -1,4 +1,4 @@
-from typing import Any, Dict, Tuple
+from typing import Any, Dict
 
 import pytorch_lightning as pl
 import torch
@@ -7,7 +7,6 @@ from torch.tensor import Tensor
 from cloud.batch_augs import CutMix
 from cloud.ema import ModelEMA
 from cloud.utils import build_object, load_metrics
-import torch.nn as nn
 
 
 class Cloud(pl.LightningModule):
@@ -22,8 +21,6 @@ class Cloud(pl.LightningModule):
         self.criterion = build_object(self.cfg["criterion"])
 
         self.metrics = load_metrics(self.cfg["metrics"])
-
-        # self.cutmix = build_object(cfg["augmentation"]["cutmix"])
 
         if self.cfg["experiment"]["ema"]:
             self.ema = ModelEMA(self.model)
@@ -53,20 +50,13 @@ class Cloud(pl.LightningModule):
         else:
             return {"optimizer": optimizer}
 
-        # return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
-
     def forward(self, x):
         return self.model(x)
 
     def training_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Tensor:
 
-        # mixed_images, mixed_targets = self.cutmix(batch["chip"], batch["label"])
-        # x = mixed_images
-        # y = mixed_targets.long()
-
         x = batch["chip"]
         y = batch["label"].long()
-        # print(batch.keys())
 
         out = self.model(x)
 
