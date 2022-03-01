@@ -1,4 +1,4 @@
-# 42 place (top 5%) solution of [On Cloud N: Cloud Cover Detection Challenge](https://www.drivendata.org/competitions/83/cloud-cover/page/396/)
+# 42nd place (top 5%) solution of [On Cloud N: Cloud Cover Detection Challenge](https://www.drivendata.org/competitions/83/cloud-cover/page/396/)
 ![](https://drivendata-public-assets.s3.amazonaws.com/cloud-cover-banner.jpg)
 
 ## Summary
@@ -28,7 +28,7 @@ Also I'v tried to apply different rotations and photometric distortions as well 
 But unfortunately it didn't improve my result.
 
 ## Model
-My final model is Unet with ResNest50 baseline that was trained with lovasz loss and cosine annealing learning rate scheduler. I've used that model to make predictions for the images with wrong annotations and made pseudo labels with confidence threshold=0.9. That process was repeated 3 times to get more pseudo labels. Finally 1121 images out of 1633 was used as pseudo labels.
+My final model is Unet with ResNest50 backbone that was trained with lovasz loss and cosine annealing learning rate scheduler. I've used that model to make predictions for the images with wrong annotations and made pseudo labels with confidence threshold=0.9. That process was repeated 3 times to get more pseudo labels. Finally 1121 images out of 1633 was used as pseudo labels.
 
 ![](./readme_imgs/pseudo_labels.png?raw=true "Examples of pseudo-labels and original masks")
 
