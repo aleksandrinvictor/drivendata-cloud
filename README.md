@@ -2,7 +2,7 @@
 ![](https://drivendata-public-assets.s3.amazonaws.com/cloud-cover-banner.jpg)
 
 ## Summary
-The goal of this challenge was to detect cloud cover in satellite imagery to remove cloud interference. Formally it is binary semantic segmentation task. Performance metric - Jaccard index.
+The goal of this challenge was to detect cloud cover in satellite imagery to remove cloud interference. It is binary semantic segmentation task. Performance metric - Jaccard index.
 My solution based on Unet model with ResNest50 backbone and pseudo labelling.
 
 ## Preprocess and augmentations
